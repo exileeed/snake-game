@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Snake Game</title>
@@ -22,26 +22,82 @@
 
     #gameOverScreen {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.9);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
       display: none;
       justify-content: center;
       align-items: center;
       flex-direction: column;
+      z-index: 10;
     }
 
-    #gameOverScreen img {
-      width: 250px;
-      margin-bottom: 20px;
+    /* hi bebi.png pop-in */
+    #gameOverImage {
+      width: 300px;
+      margin-bottom: 25px;
+      opacity: 0;
+      transform: scale(0.7);
+      transition: opacity 1.2s ease, transform 1.2s ease;
+      display: none;
+    }
+
+    #gameOverImage.show {
+      opacity: 1;
+      transform: scale(1);
     }
 
     button {
-      padding: 10px 20px;
+      padding: 12px 28px;
       font-size: 18px;
+      border: none;
+      border-radius: 6px;
       cursor: pointer;
+      margin: 10px;
+      z-index: 15; /* ensure buttons are above GIF */
+      position: relative;
+      transition: transform 0.2s ease;
+    }
+
+    #restartBtn {
+      background: white;
+      color: black;
+    }
+
+    #yesBtn {
+      background: limegreen;
+      color: black;
+    }
+
+    #noBtn {
+      background: crimson;
+      color: white;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    #noBtn:hover {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+
+    /* Deadpool GIF popup */
+    #deadpoolGif {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.7);
+      width: 400px;
+      z-index: 20;
+      border: 3px solid white;
+      border-radius: 8px;
+      opacity: 0;
+      display: none;
+      transition: opacity 1s ease, transform 1s ease;
+    }
+
+    #deadpoolGif.show {
+      display: block;
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
     }
   </style>
 </head>
@@ -54,8 +110,22 @@
 <canvas id="game" width="400" height="400"></canvas>
 
 <div id="gameOverScreen">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/8/8f/Stop_sign_light_red.svg">
-  <button onclick="restartGame()">Restart</button>
+
+  <!-- hi bebi image -->
+  <img id="gameOverImage" src="hi bebi.png" alt="Game Over">
+
+  <!-- Restart button (first 2 deaths) -->
+  <button id="restartBtn" onclick="restartGame()">Restart</button>
+
+  <!-- YES/NO buttons (3rd death onward) -->
+  <div id="choiceButtons" style="display:none;">
+    <button id="yesBtn" onclick="yesClicked()">YES</button>
+    <button id="noBtn" onclick="blockNo(event)">NO</button>
+  </div>
+
+  <!-- Deadpool GIF -->
+  <img id="deadpoolGif" src="deadpool no takebacks.gif" alt="Deadpool">
+
 </div>
 
 <script>
@@ -70,6 +140,7 @@
   let food;
   let score;
   let game;
+  let deathCount = 0;
 
   function init() {
     snake = [{ x: 200, y: 200 }];
@@ -78,8 +149,9 @@
     document.getElementById("score").innerText = score;
 
     food = randomFood();
-
     document.getElementById("gameOverScreen").style.display = "none";
+    document.getElementById("deadpoolGif").classList.remove("show");
+    document.getElementById("deadpoolGif").style.display = "none";
 
     if (game) clearInterval(game);
     game = setInterval(draw, 120);
@@ -94,24 +166,22 @@
 
   document.addEventListener("keydown", changeDirection);
 
-  function changeDirection(event) {
-    if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
-    if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
-    if (event.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
-    if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+  function changeDirection(e) {
+    if (e.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+    if (e.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+    if (e.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+    if (e.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
   }
 
   function draw() {
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, canvasSize, canvasSize);
 
-    // Draw snake
     for (let i = 0; i < snake.length; i++) {
       ctx.fillStyle = i === 0 ? "lime" : "green";
       ctx.fillRect(snake[i].x, snake[i].y, box, box);
     }
 
-    // Draw food
     ctx.fillStyle = "red";
     ctx.fillRect(food.x, food.y, box, box);
 
@@ -123,26 +193,21 @@
     if (direction === "RIGHT") headX += box;
     if (direction === "DOWN") headY += box;
 
-    // Wall collision
     if (
       headX < 0 ||
       headY < 0 ||
       headX >= canvasSize ||
       headY >= canvasSize
-    ) {
-      return gameOver();
-    }
+    ) return gameOver();
 
     const newHead = { x: headX, y: headY };
 
-    // Self collision
-    for (let i = 0; i < snake.length; i++) {
-      if (snake[i].x === newHead.x && snake[i].y === newHead.y) {
+    for (let part of snake) {
+      if (part.x === newHead.x && part.y === newHead.y) {
         return gameOver();
       }
     }
 
-    // Eat food
     if (headX === food.x && headY === food.y) {
       score++;
       document.getElementById("score").innerText = score;
@@ -156,11 +221,48 @@
 
   function gameOver() {
     clearInterval(game);
-    document.getElementById("gameOverScreen").style.display = "flex";
+    deathCount++;
+
+    const screen = document.getElementById("gameOverScreen");
+    const image = document.getElementById("gameOverImage");
+    const restartBtn = document.getElementById("restartBtn");
+    const choices = document.getElementById("choiceButtons");
+
+    screen.style.display = "flex";
+
+    if (deathCount < 3) {
+      restartBtn.style.display = "inline-block";
+      choices.style.display = "none";
+      image.style.display = "none";
+    } else {
+      restartBtn.style.display = "none";
+      choices.style.display = "block";
+
+      // Reset animation
+      image.classList.remove("show");
+      image.style.display = "block";
+      void image.offsetWidth; // force reflow
+      image.classList.add("show");
+    }
   }
 
   function restartGame() {
     init();
+  }
+
+  function yesClicked() {
+    console.log("YES clicked!");
+    const deadpool = document.getElementById("deadpoolGif");
+
+    // Reset animation
+    deadpool.classList.remove("show");
+    deadpool.style.display = "block";
+    void deadpool.offsetWidth; // force reflow
+    deadpool.classList.add("show");
+  }
+
+  function blockNo(e) {
+    e.preventDefault(); // NO does nothing
   }
 
   init();
